@@ -13,15 +13,35 @@
 3. **Androidから物理Wi-Fiへ直接接続:** 標準構成ではできません。USB NICをLinuxコンテナへ移して
    `iw`で使えることと、AndroidのSettings/WifiManagerから使えることは別です。
 4. **インターホンと同じLAN:** 「同じL2の独立端末」とは限りませんが、標準NATでもAndroidからLANへの
-   unicastは可能です。Wi-Fiホストで独立LAN IPを保証する構成はなく、proxy ARP/routingは実機検証が必要です。
+   unicastは可能です。本リポジトリのproxy ARP/routing構成ではLAN側IPを追加でき、今回の環境で動作確認済みです。
+   ただし、Wi-Fiホスト上で別MACを持つ独立したL2端末になる構成ではありません。
 5. **Broadcast/Multicast/mDNS:** 標準NATではセグメントを越えません。Avahi reflector、SSDP relay、
-   機器固有UDP relayを追加すれば中継候補になりますが、ポート、応答先、TTL、送信元IP依存のアプリは失敗します。
+   機器固有UDP relayを追加して中継します。本リポジトリではAiphoneアプリの探索通信
+   （要求UDP/51711、応答UDP/51712）を専用relayで中継し、親機を検出できることを確認済みです。
 6. **推奨:** Ubuntu 24.04上でWaydroidを直接実行し、headless Westonとsystemdで常駐させます。
    ADB操作だけDocker化し、探索通信は必要なプロトコルだけ中継します。SSIDまたは端末完全性が認証条件なら、
    常時給電したAndroid実機が最も確実です。
 
 詳細な根拠は [feasibility.md](docs/feasibility.md) と
 [wifi-limitations.md](docs/wifi-limitations.md) にあります。
+
+## 動作確認済みの構成
+
+2026-08-01に、Wi-Fi接続したUbuntuホスト上のWaydroidからAiphoneアプリ
+（package: `jp.co.aiphone.refine`）を起動し、物理LAN上の親機を探索できることを確認しました。
+確認時の構成は次のとおりです。
+
+| 項目 | 確認時の値 |
+|---|---|
+| ホストのWi-Fi interface | `wlp0s20f3` |
+| ホストの物理LAN | `192.168.0.0/24` |
+| ルーター | `192.168.0.1` |
+| 親機 | `192.168.0.17` |
+| Waydroidの通常IP | `192.168.240.112` |
+| Waydroidへ追加したLAN側IP | `192.168.0.250` |
+
+成功に必要だったのは、Waydroidへの物理LAN側IP追加、対象packageへのFake Wi-Fi、`wlan0`互換dummy
+interface、Aiphone専用の双方向UDP relayです。別環境ではinterface名、subnet、空きIP、親機IPを読み替えてください。
 
 ## 構成
 
@@ -228,6 +248,89 @@ sudo ./scripts/test-network.sh capture 30
 
 プロセス起動だけを合格にせず、wlan側とwaydroid0側の`tcpdump`、Android発信、LAN端末発信の4点を確認します。
 詳細は [networking.md](docs/networking.md) を参照してください。
+
+### Aiphoneアプリで確認できた手順
+
+まず、ホスト側のinterface名、subnet、親機IP、Waydroidの現在のIPを確認します。
+
+```bash
+ip -br address
+ip route
+cat /var/lib/misc/dnsmasq.waydroid0.leases
+```
+
+`config/network.env`を次のように設定します。以下は確認時の値なので、特に`HOST_LAN_IF`、各IP、
+`ANDROID_LAN_IP`を自分のLANに合わせて変更してください。`ANDROID_LAN_IP`にはDHCP配布範囲外の未使用IP、
+またはルーターで固定予約したIPを使います。
+
+```dotenv
+HOST_LAN_IF=wlp0s20f3
+WAYDROID_IF=waydroid0
+ROUTER_IP=192.168.0.1
+INTERCOM_IP=192.168.0.17
+WAYDROID_IP=192.168.240.112
+
+ENABLE_SAME_LAN_IP=yes
+ANDROID_LAN_IP=192.168.0.250
+LAN_PREFIX_LENGTH=24
+
+FAKE_WIFI_PACKAGES=jp.co.aiphone.refine
+ENABLE_ANDROID_WLAN0_COMPAT=yes
+ANDROID_WIFI_COMPAT_IF=wlan0
+```
+
+ネットワーク設定を適用し、Waydroidからルーターと親機へ到達できることを確認します。
+
+```bash
+sudo ./scripts/setup-network.sh ./config/network.env
+systemctl status waydroid-same-lan.service --no-pager
+./scripts/test-network.sh all | tee network-test.log
+```
+
+確認時の構成では、Android側の`eth0`に通常IPとLAN側IPの両方が付き、物理LAN宛ての通信では
+`192.168.0.250`がsource addressとして選ばれます。
+
+```bash
+pid=$(sudo lxc-info -P /var/lib/waydroid/lxc -n waydroid -pH)
+sudo nsenter -t "$pid" -n ip -br address
+sudo nsenter -t "$pid" -n ip route get 192.168.0.17
+```
+
+次に、別terminalでAiphone専用relayを起動したままにします。このrelayはroot権限でraw socketを使い、
+WaydroidからのUDP/51711 broadcastを物理LANへ転送し、親機からLAN側IPのUDP/51712へ返る応答を
+Waydroid側へ戻します。
+
+```bash
+set -a
+source config/network.env
+set +a
+sudo ./scripts/aiphone-discovery-relay.py \
+  --inside "$WAYDROID_IF" \
+  --outside "$HOST_LAN_IF" \
+  --source-ip "$ANDROID_LAN_IP" \
+  --broadcast-ip 192.168.0.255 \
+  --port 51711 \
+  --response-port 51712
+```
+
+`--broadcast-ip`は自分のsubnetのbroadcast addressへ変更してください。その状態でアプリを起動し、
+親機探索を実行します。relay側に次の2種類のlogが出れば、要求と応答の両方向を中継できています。
+
+```text
+relayed ... bytes from UDP source port ...
+relayed response: <親機IP>:<port> -> <Waydroid LAN側IP>:51712 (... bytes)
+```
+
+うまく検出できない場合は、両interfaceで同時にpacketを確認します。
+
+```bash
+sudo tcpdump -ni waydroid0 'udp port 51711 or udp port 51712'
+sudo tcpdump -ni wlp0s20f3 'udp port 51711 or udp port 51712'
+adb logcat | grep -E 'FakeWifi|aiphone|refine'
+```
+
+`waydroid-same-lan.service`は再起動後も有効ですが、現在のAiphone専用relayはforeground processです。
+ホストまたはrelayを再起動した場合は、アプリで探索する前にrelayをもう一度起動してください。
 
 ## Docker内Waydroid実験（非推奨）
 
