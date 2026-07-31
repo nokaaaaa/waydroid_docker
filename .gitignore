@@ -1,0 +1,5 @@
+scripts/__pycache__/
+snapshots/*.tar.zst
+snapshots/*.tar.zst.gpg
+snapshots/*.sha256
+

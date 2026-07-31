@@ -3,6 +3,9 @@
 このリポジトリは、Waydroid本体をUbuntuホストで動かし、DockerはADB操作・診断・任意の
 ループバックプロキシに限定する構成です。`nested-waydroid`は再現実験用であり、本番構成ではありません。
 
+現在のアプリデータを別PCへ複製し、clone後に1コマンドで復元する手順は
+[README-PORTABLE.md](README-PORTABLE.md) を参照してください。
+
 ## 最初に結論
 
 1. **Docker内での安定運用:** 起動例は作れますが、Waydroid(LXC)をDockerへネストし、

@@ -1,0 +1,15 @@
+[Unit]
+Description=Aiphone discovery relay for Waydroid
+After=waydroid-same-lan.service waydroid-container.service network-online.target
+Requires=waydroid-same-lan.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/libexec/waydroid-docker/run-aiphone-relay.sh /etc/waydroid-same-lan.env
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+
