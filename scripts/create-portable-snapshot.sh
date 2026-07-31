@@ -41,7 +41,22 @@ tmp_output=$output.partial
 trap 'rm -f -- "$tmp_output"' EXIT
 rm -f -- "$tmp_output"
 
-echo "Creating encrypted snapshot. Enter a strong passphrase when GnuPG asks."
+echo "Creating encrypted snapshot. Enter a strong passphrase when prompted."
+if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+  echo "ERROR: an interactive terminal is required to enter the encryption passphrase." >&2
+  exit 1
+fi
+IFS= read -r -s -p "Snapshot passphrase: " snapshot_passphrase </dev/tty
+printf '\n' >/dev/tty
+IFS= read -r -s -p "Confirm passphrase: " snapshot_passphrase_confirm </dev/tty
+printf '\n' >/dev/tty
+if [[ -z $snapshot_passphrase || $snapshot_passphrase != "$snapshot_passphrase_confirm" ]]; then
+  unset snapshot_passphrase snapshot_passphrase_confirm
+  echo "ERROR: passphrases were empty or did not match." >&2
+  exit 1
+fi
+unset snapshot_passphrase_confirm
+
 tar --create --numeric-owner --acls --xattrs --one-file-system \
   --exclude='data/waydroid_tmp/*' \
   --exclude='data/tombstones/*' \
@@ -50,7 +65,10 @@ tar --create --numeric-owner --acls --xattrs --one-file-system \
   -C /var/lib/waydroid \
     images overlay overlay_rw waydroid.cfg waydroid.prop waydroid_base.prop \
   | zstd -T0 -10 \
-  | gpg --symmetric --cipher-algo AES256 --output "$tmp_output"
+  | gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 \
+      --symmetric --cipher-algo AES256 --output "$tmp_output" \
+      3<<<"$snapshot_passphrase"
+unset snapshot_passphrase
 
 mv -- "$tmp_output" "$output"
 sha256sum "$output" > "$checksum"
@@ -61,4 +79,3 @@ trap - EXIT
 echo "Snapshot created: $output"
 echo "Checksum created: $checksum"
 echo "The passphrase is not stored anywhere. Keep it separately."
-
