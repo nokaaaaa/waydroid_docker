@@ -1,0 +1,70 @@
+name: waydroid-operations
+
+services:
+  # Recommended use of Docker: an isolated ADB/network diagnostics toolbox.
+  adb-tools:
+    build:
+      context: .
+      target: tools
+    profiles: ["tools"]
+    network_mode: host
+    volumes:
+      - adb-keys:/home/waydroidop/.android
+      - ./artifacts:/work/artifacts
+    init: true
+
+  # Optional loopback-only TCP proxy. Reach it remotely with an SSH tunnel.
+  adb-proxy:
+    build:
+      context: .
+      target: tools
+    command:
+      - sh
+      - -ec
+      - exec socat TCP-LISTEN:5555,fork,reuseaddr TCP:${WAYDROID_IP:-192.168.240.2}:5555
+    ports:
+      - "${ADB_BIND_ADDRESS:-127.0.0.1}:${ADB_HOST_PORT:-5555}:5555"
+    restart: unless-stopped
+
+  # Experimental only. This is intentionally not part of a normal `up`.
+  nested-waydroid:
+    build:
+      context: .
+      target: waydroid-experimental
+    profiles: ["experimental"]
+    privileged: true
+    cgroup: host
+    network_mode: host
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    volumes:
+      - nested-waydroid-data:/var/lib/waydroid
+      - type: bind
+        source: /dev/binderfs
+        target: /dev/binderfs
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /lib/modules
+        target: /lib/modules
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /sys/fs/cgroup
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /dev/dri
+        target: /dev/dri
+        bind:
+          create_host_path: false
+    restart: unless-stopped
+    stop_grace_period: 45s
+
+volumes:
+  adb-keys:
+  nested-waydroid-data:

@@ -1,0 +1,23 @@
+[Unit]
+Description=Headless Waydroid session (host-native; Docker is ADB tooling only)
+Documentation=https://docs.waydro.id/
+After=network-online.target waydroid-container.service
+Wants=network-online.target waydroid-container.service
+ConditionPathExists=/var/lib/waydroid/waydroid.cfg
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/waydroid-headless
+ExecStart=/usr/local/libexec/waydroid-docker/start-waydroid.sh start
+ExecStop=/usr/local/libexec/waydroid-docker/start-waydroid.sh stop
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=180
+TimeoutStopSec=60
+
+# This unit starts a host LXC container and a compositor, so generic systemd
+# hardening directives that block namespaces/mounts cannot be applied here.
+NoNewPrivileges=no
+
+[Install]
+WantedBy=multi-user.target
