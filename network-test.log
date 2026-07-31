@@ -1,0 +1,236 @@
+
+===== Waydroid state =====
++ waydroid status 
+Session:	RUNNING
+Container:	RUNNING
+Vendor type:	MAINLINE
+IP address:	192.168.240.112
+Session user:	yuki(1000)
+Wayland display:	wayland-0
++ timeout 30 waydroid session start 
+Use '--details-to-stdout' to get more details:
+  /usr/bin/waydroid --details-to-stdout session start
+WARN: command failed (1)
++ android_shell getprop ro.build.version.release 
+
+===== ADB =====
++ adb devices -l 
+WARN: command failed (127)
++ adb shell getprop 
+WARN: command failed (127)
+
+===== Host IP and routes =====
++ ip -br addr 
+lo               UNKNOWN        127.0.0.1/8 ::1/128 
+enp0s31f6        DOWN           
+wlp0s20f3        UP             192.168.0.14/24 240f:140:e46d:1:7e2c:ddb1:7fd:4a01/64 240f:140:e46d:1:7d1e:4929:1b5d:69a3/64 fe80::de5:69e9:dfc7:b8cc/64 
+tailscale0       UNKNOWN        100.96.223.36/32 fd7a:115c:a1e0::2636:df25/128 fe80::aa9c:2df:efa7:9659/64 
+docker0          DOWN           172.17.0.1/16 fe80::d855:baff:fefd:3f1d/64 
+lxcbr0           DOWN           10.0.3.1/24 
+waydroid0        UP             192.168.240.1/24 fe80::216:3eff:fe00:1/64 
+vethJwonPt@if2   UP             fe80::fcc4:cfff:fe0d:7c67/64 
++ ip route 
+default via 192.168.0.1 dev wlp0s20f3 proto dhcp metric 600 
+10.0.3.0/24 dev lxcbr0 proto kernel scope link src 10.0.3.1 linkdown 
+169.254.0.0/16 dev tailscale0 scope link metric 1000 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 linkdown 
+172.17.0.0/16 dev docker0 proto kernel scope link src 172.17.0.1 metric 425 linkdown 
+192.168.0.0/24 dev wlp0s20f3 proto kernel scope link src 192.168.0.14 metric 600 
+192.168.0.250 dev waydroid0 scope link 
+192.168.240.0/24 dev waydroid0 proto kernel scope link src 192.168.240.1 
+
+===== Android IP and routes =====
++ android_shell ip addr 
++ android_shell ip route 
+
+===== LAN unicast from host =====
++ ping -c 3 -W 2 192.168.0.1 
+PING 192.168.0.1 (192.168.0.1) 56(84) bytes of data.
+64 bytes from 192.168.0.1: icmp_seq=1 ttl=64 time=12.9 ms
+64 bytes from 192.168.0.1: icmp_seq=2 ttl=64 time=5.31 ms
+64 bytes from 192.168.0.1: icmp_seq=3 ttl=64 time=3.63 ms
+
+--- 192.168.0.1 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2002ms
+rtt min/avg/max/mdev = 3.628/7.264/12.855/4.012 ms
++ ping -c 3 -W 2 192.168.0.17 
+PING 192.168.0.17 (192.168.0.17) 56(84) bytes of data.
+64 bytes from 192.168.0.17: icmp_seq=1 ttl=64 time=236 ms
+64 bytes from 192.168.0.17: icmp_seq=2 ttl=64 time=42.8 ms
+64 bytes from 192.168.0.17: icmp_seq=3 ttl=64 time=289 ms
+
+--- 192.168.0.17 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2002ms
+rtt min/avg/max/mdev = 42.766/189.123/288.760/105.720 ms
+
+===== LAN unicast from Android =====
++ android_shell ping -c 3 -W 2 192.168.0.1 
++ android_shell ping -c 3 -W 2 192.168.0.17 
+
+===== Android framework network view =====
++ android_shell dumpsys connectivity 
++ android_shell cmd wifi status 
++ android_shell dumpsys wifi 
++ android_shell getprop dhcp.eth0.ipaddress 
+NOTE: <unknown ssid>/no Wi-Fi state is expected for Waydroid's veth/Ethernet transport.
++ android_shell dumpsys\ wifi\ \|\ grep\ -i\ multicast 
+NOTE: dumpsys can list locks but cannot acquire one. MulticastLock acquisition/receive must be
+      exercised by an APK declaring CHANGE_WIFI_MULTICAST_STATE; do not report it as tested here.
+
+===== IGMP/multicast membership =====
++ cat /proc/net/igmp 
+Idx	Device    : Count Querier	Group    Users Timer	Reporter
+1	lo        :     1      V3
+				010000E0     1 0:00000000		0
+2	enp0s31f6 :     1      V3
+				010000E0     1 0:00000000		0
+3	wlp0s20f3 :     2      V2
+				010000E0     1 0:00000000		0
+				FB0000E0     5 0:00000000		1
+4	tailscale0:     2      V3
+				FB0000E0     4 0:00000000		0
+				010000E0     1 0:00000000		0
+5	docker0   :     3      V3
+				FB0000E0     2 0:00000000		0
+				010000E0     1 0:00000000		0
+				6A0000E0     1 0:00000000		0
+292	lxcbr0    :     3      V3
+				FB0000E0     2 0:00000000		0
+				010000E0     1 0:00000000		0
+				6A0000E0     1 0:00000000		0
+301	waydroid0 :     3      V3
+				FB0000E0     5 0:00000000		0
+				010000E0     1 0:00000000		0
+				6A0000E0     1 0:00000000		0
+302	vethJwonPt:     1      V3
+				010000E0     1 0:00000000		0
++ ip maddr show 
+1:	lo
+	inet  224.0.0.1
+	inet6 ff02::1
+	inet6 ff01::1
+2:	enp0s31f6
+	link  33:33:00:00:00:01
+	link  01:00:5e:00:00:01
+	inet  224.0.0.1
+	inet6 ff02::1
+	inet6 ff01::1
+3:	wlp0s20f3
+	link  01:00:5e:00:00:01 users 2
+	link  01:00:5e:00:00:fb users 2
+	link  33:33:00:00:00:01 users 2
+	link  33:33:ff:c7:b8:cc users 2
+	link  33:33:ff:5d:69:a3 users 2
+	link  33:33:ff:fd:4a:01 users 2
+	link  33:33:00:00:00:fb users 2
+	inet  224.0.0.1
+	inet  224.0.0.251 users 5
+	inet6 ff02::fb
+	inet6 ff02::1:fffd:4a01
+	inet6 ff02::1:ff5d:69a3
+	inet6 ff02::1:ffc7:b8cc
+	inet6 ff02::1
+	inet6 ff01::1
+4:	tailscale0
+	inet  224.0.0.251 users 4
+	inet  224.0.0.1
+	inet6 ff02::1
+	inet6 ff01::1
+5:	docker0
+	link  33:33:00:00:00:01
+	link  01:00:5e:00:00:6a
+	link  33:33:00:00:00:6a
+	link  01:00:5e:00:00:01
+	link  01:00:5e:00:00:fb
+	link  33:33:ff:fd:3f:1d
+	inet  224.0.0.251 users 2
+	inet  224.0.0.1
+	inet  224.0.0.106
+	inet6 ff02::1:fffd:3f1d
+	inet6 ff02::6a
+	inet6 ff02::1
+	inet6 ff01::1
+292:	lxcbr0
+	link  33:33:00:00:00:01
+	link  01:00:5e:00:00:6a
+	link  33:33:00:00:00:6a
+	link  01:00:5e:00:00:01
+	link  01:00:5e:00:00:fb
+	inet  224.0.0.251 users 2
+	inet  224.0.0.1
+	inet  224.0.0.106
+	inet6 ff02::6a
+	inet6 ff02::1
+	inet6 ff01::1
+301:	waydroid0
+	link  33:33:00:00:00:01
+	link  01:00:5e:00:00:6a
+	link  33:33:00:00:00:6a
+	link  01:00:5e:00:00:01
+	link  01:00:5e:00:00:fb
+	link  33:33:ff:00:00:01
+	link  33:33:00:00:00:fb
+	inet  224.0.0.251 users 5
+	inet  224.0.0.1
+	inet  224.0.0.106
+	inet6 ff02::fb
+	inet6 ff02::1:ff00:1
+	inet6 ff02::6a
+	inet6 ff02::1
+	inet6 ff01::1
+302:	vethJwonPt
+	link  33:33:00:00:00:01
+	link  01:00:5e:00:00:01
+	link  33:33:ff:0d:7c:67
+	inet  224.0.0.1
+	inet6 ff02::1:ff0d:7c67
+	inet6 ff02::1
+	inet6 ff01::1
++ android_shell cat /proc/net/igmp 
++ android_shell ip maddr 
+
+===== mDNS and SSDP visibility =====
++ avahi-browse --all --terminate 
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          Internet Printer     local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          Internet Printer     local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          Secure Internet Printer local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          Secure Internet Printer local
++ wlp0s20f3 IPv6 BRAVIA-4K-UR3-c4df6a240bab5779b98617df3e28cf9c _googlecast._tcp     local
++ wlp0s20f3 IPv4 BRAVIA-4K-UR3-c4df6a240bab5779b98617df3e28cf9c _googlecast._tcp     local
++ waydroid0 IPv6 adb-unidentified                              _adb._tcp            local
++ waydroid0 IPv4 adb-unidentified                              _adb._tcp            local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          UNIX Printer         local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          PDL Printer          local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          Web Site             local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          Microsoft Windows Network local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          _scanner._tcp        local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          _privet._tcp         local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          _uscan._tcp          local
++ wlp0s20f3 IPv6 EPSON EP-882A Series                          _uscans._tcp         local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          UNIX Printer         local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          PDL Printer          local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          Web Site             local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          Microsoft Windows Network local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          _scanner._tcp        local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          _privet._tcp         local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          _uscan._tcp          local
++ wlp0s20f3 IPv4 EPSON EP-882A Series                          _uscans._tcp         local
++ wlp0s20f3 IPv6 SONY KJ-55X9500H                              _androidtvremote2._tcp local
++ wlp0s20f3 IPv6 SONY KJ-55X9500H                              AirPlay Remote Video local
++ wlp0s20f3 IPv4 SONY KJ-55X9500H                              _androidtvremote2._tcp local
++ wlp0s20f3 IPv4 SONY KJ-55X9500H                              AirPlay Remote Video local
++ timeout 5 tcpdump -ni wlp0s20f3 udp\ port\ 5353\ or\ udp\ port\ 1900 
+
+WARN: command failed (124)
++ timeout 5 tcpdump -ni waydroid0 udp\ port\ 5353\ or\ udp\ port\ 1900 
+01:08:41.478990 IP6 fe80::216:3eff:fe00:1.5353 > ff02::fb.5353: 0 [2q] PTR (QM)? _ipp._tcp.local. PTR (QM)? _ipps._tcp.local. (45)
+01:08:41.479229 IP 192.168.240.1.5353 > 224.0.0.251.5353: 0 [2q] PTR (QM)? _ipp._tcp.local. PTR (QM)? _ipps._tcp.local. (45)
+
+WARN: command failed (124)
+
+UDP proof requires two peers; this report does not label silence as success.
+Receiver: ./scripts/test-network.sh listen 37020
+Sender:   ./scripts/test-network.sh send-broadcast <LAN-broadcast-address> 37020
+Repeat in the opposite direction and capture both wlp0s20f3/waydroid0.
+For Android-originated traffic, use an app that sends broadcast/multicast (and acquires
+WifiManager.MulticastLock where required), while running './scripts/test-network.sh capture 30'.

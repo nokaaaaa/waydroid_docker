@@ -189,6 +189,22 @@ adb pull /sdcard/window.xml
 ./scripts/test-network.sh all | tee network-test.log
 ```
 
+アプリがAndroid自身のIPと親機が同一subnetであることを要求する場合、Wi-Fi uplinkではmacvlanの代わりに
+routed/proxy-ARP方式を使えます。`config/network.env`で未使用の`ANDROID_LAN_IP`を指定し、ルーターの
+DHCP配布範囲から除外（または固定予約）してから適用します。
+
+```bash
+sudo ./scripts/setup-network.sh ./config/network.env
+systemctl status waydroid-same-lan.service
+sudo nsenter -t "$(sudo lxc-info -P /var/lib/waydroid/lxc -n waydroid -pH)" -n ip -br addr
+```
+
+Androidには従来の`192.168.240.x`（Internet/NAT）と物理LAN側IPの両方が付きます。Wi-Fi AP側からは
+親PCと同じMACに複数IPが見える構成です。同一subnetのunicastは可能になりますが、L2 broadcastを
+透過するものではないため、探索方式に応じて以下のrelayも併用します。アプリが
+`NetworkCapabilities.TRANSPORT_WIFI`を必須にする場合は、そのpackageだけを`FAKE_WIFI_PACKAGES`へ指定します。
+これは接続種別の報告を変えるだけで、SSID scanや物理Wi-Fi HALを追加する設定ではありません。
+
 対象アプリの探索が失敗した場合に限り、relayを一つずつ有効化します。
 
 ```bash

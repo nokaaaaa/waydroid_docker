@@ -29,7 +29,12 @@ link-local multicastを自然には運びません。Compose networkへAndroid�
 
 AndroidへLAN rangeの/32をrouteし、hostがproxy ARPする構成はunicastの独立IP候補です。ただしAndroid側gateway、
 hostの同一prefix二interface問題、routerのclient isolation、ARP fluxを解決する必要があります。broadcast domainは
-統合されないためrelayは依然必要です。本repoはサイト固有IPを誤設定しないよう自動化していません。
+統合されないためrelayは依然必要です。既定ではサイト固有IPを誤設定しないよう自動化していません。
+
+`ENABLE_SAME_LAN_IP=yes`を明示した場合だけ、Androidの`eth0`へ物理LANの副IPを追加し、hostに
+/32 routeと両interfaceのproxy ARPを設定します。既存のWaydroid DHCP addressはInternet/NAT用に残します。
+指定IPはrouterのDHCP poolから除外し、`ip neigh`、別LAN端末からのping、親機へのAndroid発pingで重複と
+往復疎通を確認してください。この方式でもbroadcast domain自体は結合されません。
 
 ### NAT + protocol relay（既定）
 

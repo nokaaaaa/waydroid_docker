@@ -30,10 +30,52 @@ printf '%s\n' \
   "net.ipv4.conf.${HOST_LAN_IF}.rp_filter=2" \
   "net.ipv4.conf.${WAYDROID_IF}.rp_filter=2" \
   > /etc/sysctl.d/90-waydroid-network.conf
-sysctl --system >/dev/null
+
+if [[ ${ENABLE_SAME_LAN_IP:-no} == yes ]]; then
+  : "${ANDROID_LAN_IP:?ENABLE_SAME_LAN_IP=yes requires ANDROID_LAN_IP}"
+  : "${LAN_PREFIX_LENGTH:?ENABLE_SAME_LAN_IP=yes requires LAN_PREFIX_LENGTH}"
+  printf '%s\n' \
+    "net.ipv4.conf.${HOST_LAN_IF}.proxy_arp=1" \
+    "net.ipv4.conf.${WAYDROID_IF}.proxy_arp=1" \
+    >> /etc/sysctl.d/90-waydroid-network.conf
+fi
+sysctl -q -p /etc/sysctl.d/90-waydroid-network.conf
 
 echo "Configured routed/NAT forwarding. Waydroid's own waydroid-net.sh owns NAT and dnsmasq rules."
 echo "No macvlan/bridge was created on ${HOST_LAN_IF}; managed Wi-Fi usually cannot carry extra client MACs."
+
+if [[ ${ENABLE_SAME_LAN_IP:-no} == yes ]]; then
+  command -v lxc-info >/dev/null
+  command -v nsenter >/dev/null
+  install -m 0755 "$script_dir/apply-same-lan-ip.sh" /usr/local/libexec/waydroid-same-lan-ip
+  install -m 0600 "$env_file" /etc/waydroid-same-lan.env
+  cat > /etc/systemd/system/waydroid-same-lan.service <<'EOF'
+[Unit]
+Description=Assign a physical-LAN address to Waydroid through proxy ARP
+After=network-online.target waydroid-container.service
+Wants=network-online.target waydroid-container.service
+PartOf=waydroid-container.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/waydroid-same-lan-ip /etc/waydroid-same-lan.env
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now waydroid-same-lan.service
+fi
+
+if [[ -n ${FAKE_WIFI_PACKAGES:-} ]]; then
+  [[ $FAKE_WIFI_PACKAGES =~ ^[a-zA-Z0-9_.,:-]+$ ]] || {
+    echo "ERROR: invalid FAKE_WIFI_PACKAGES list." >&2
+    exit 1
+  }
+  waydroid prop set persist.waydroid.fake_wifi "$FAKE_WIFI_PACKAGES"
+  echo "Enabled Waydroid Wi-Fi transport reporting for: $FAKE_WIFI_PACKAGES"
+fi
 
 if [[ ${ENABLE_MDNS_REFLECTOR:-no} == yes ]]; then
   avahi_cfg=/etc/avahi/avahi-daemon.conf

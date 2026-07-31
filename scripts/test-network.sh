@@ -24,12 +24,19 @@ EOF
 
 header() { printf '\n===== %s =====\n' "$*"; }
 try() { printf '+ '; printf '%q ' "$@"; printf '\n'; "$@" || echo "WARN: command failed ($?)"; }
+android_shell() {
+  if [[ ${EUID} -eq 0 ]]; then
+    waydroid shell -- "$@"
+  else
+    sudo waydroid shell -- "$@"
+  fi
+}
 
 all_tests() {
   header 'Waydroid state'
   try waydroid status
   try timeout 30 waydroid session start
-  try waydroid shell getprop ro.build.version.release
+  try android_shell getprop ro.build.version.release
 
   header 'ADB'
   try adb devices -l
@@ -39,31 +46,31 @@ all_tests() {
   try ip -br addr
   try ip route
   header 'Android IP and routes'
-  try waydroid shell ip addr
-  try waydroid shell ip route
+  try android_shell ip addr
+  try android_shell ip route
 
   header 'LAN unicast from host'
   [[ -n ${ROUTER_IP:-} ]] && try ping -c 3 -W 2 "$ROUTER_IP"
   [[ -n ${INTERCOM_IP:-} ]] && try ping -c 3 -W 2 "$INTERCOM_IP"
   header 'LAN unicast from Android'
-  [[ -n ${ROUTER_IP:-} ]] && try waydroid shell ping -c 3 -W 2 "$ROUTER_IP"
-  [[ -n ${INTERCOM_IP:-} ]] && try waydroid shell ping -c 3 -W 2 "$INTERCOM_IP"
+  [[ -n ${ROUTER_IP:-} ]] && try android_shell ping -c 3 -W 2 "$ROUTER_IP"
+  [[ -n ${INTERCOM_IP:-} ]] && try android_shell ping -c 3 -W 2 "$INTERCOM_IP"
 
   header 'Android framework network view'
-  try waydroid shell dumpsys connectivity
-  try waydroid shell cmd wifi status
-  try waydroid shell dumpsys wifi
-  try waydroid shell getprop dhcp.eth0.ipaddress
+  try android_shell dumpsys connectivity
+  try android_shell cmd wifi status
+  try android_shell dumpsys wifi
+  try android_shell getprop dhcp.eth0.ipaddress
   echo "NOTE: <unknown ssid>/no Wi-Fi state is expected for Waydroid's veth/Ethernet transport."
-  try sh -c 'waydroid shell dumpsys wifi | grep -i multicast'
+  try android_shell sh -c 'dumpsys wifi | grep -i multicast'
   echo "NOTE: dumpsys can list locks but cannot acquire one. MulticastLock acquisition/receive must be"
   echo "      exercised by an APK declaring CHANGE_WIFI_MULTICAST_STATE; do not report it as tested here."
 
   header 'IGMP/multicast membership'
   try cat /proc/net/igmp
   try ip maddr show
-  try waydroid shell cat /proc/net/igmp
-  try waydroid shell ip maddr
+  try android_shell cat /proc/net/igmp
+  try android_shell ip maddr
 
   header 'mDNS and SSDP visibility'
   try avahi-browse --all --terminate
@@ -113,8 +120,9 @@ case "$mode" in
     if [[ ${EUID} -ne 0 ]]; then
       exec sudo NETWORK_ENV="$env_file" bash "$0" capture "$seconds"
     fi
-    timeout "$seconds" tcpdump -ni any \
-      '(udp port 5353) or (udp port 1900) or (udp and broadcast) or igmp'
+    capture_filter='udp or igmp'
+    [[ -z ${INTERCOM_IP:-} ]] || capture_filter="host ${INTERCOM_IP} or ${capture_filter}"
+    timeout "$seconds" tcpdump -nni any -vv "$capture_filter"
     ;;
   *)
     usage >&2
