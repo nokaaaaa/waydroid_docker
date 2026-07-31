@@ -18,19 +18,21 @@
 ## 0. 元PCでスナップショットを公開する（初回またはデータ更新時）
 
 repository directoryで次を実行します。Waydroidを停止し、整合性のある暗号化snapshotを作成します。
-GnuPGに聞かれたpassphraseは別の安全な場所へ保管してください。GitHubには保存されません。
+続けて暗号化済みsnapshotだけをGitHub Releaseへuploadします。途中でGnuPGに聞かれたpassphraseは
+別の安全な場所へ保管してください。GitHubには保存されません。GitHub CLIでログイン済みである必要があります。
+
+```bash
+./scripts/prepare-portable-release.sh
+```
+
+作成とuploadを個別に行いたい場合は次の2コマンドです。
 
 ```bash
 ./scripts/create-portable-snapshot.sh
-```
-
-作成後、暗号化済みsnapshotだけをGitHub Releaseへuploadします。GitHub CLIでログイン済みである必要があります。
-
-```bash
 ./scripts/publish-portable-snapshot.sh
 ```
 
-アプリデータを更新した場合は、この2コマンドをもう一度実行するとRelease assetを置き換えます。
+アプリデータを更新した場合は、同じ準備コマンドをもう一度実行するとRelease assetを置き換えます。
 
 ## 1. 別PCでcloneしてセットアップする
 
@@ -85,4 +87,3 @@ GitHub Releaseを使わず、暗号化snapshotと`.sha256`を別PCへ安全に�
 ```bash
 SNAPSHOT_FILE=/path/to/waydroid-state.tar.zst.gpg ./scripts/setup-portable-clone.sh
 ```
-
